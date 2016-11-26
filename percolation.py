@@ -1,108 +1,155 @@
 import numpy as np
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
-__author__ = 'A. Orden'
-__name__ = '__main__'
+def percolation(p,L):
+    """
+    Simulate percolation and label contiguous clusters using the
+    Hoshen-Kopelman algorithm
+    
+    Parameters
+    ----------
+    p : float
+        Cluster concentration
+    L : int
+        Lattice length
+    
+    Returns
+    -------
+    hk : array
+        Percolation cluster labeled using Hoshen-Kopelman algorithm
+    meanmass : float
+        Average cluster mass of the finite clusters in the 'hk' array
+    """
+    
+    """
+    Creates a Boolean grid representing whether a site is occupied
+    (i.e. True) or vacant (i.e. False)
+    """
+    grid = np.random.rand(L,L) < p
+    
+    """Container for cluster labels"""
+    hk = np.zeros((L,L))
+    
+    """Label each occupied site with a different number"""
+    label = 1
+    for i in xrange(L):
+        for j in np.arange(L):
+            if grid[i][j] == True:
+                hk[i][j] = label
+                label += 1
+    
+    """Container indicating which labels are adjacent to one another"""
+    adjacent = []
+    
+    """Identify labels which are bottom adjacent"""
+    i = 0
+    for j in xrange(L-1):
+        if grid[i][j] == True and grid[i][j+1] == True:
+            adjacent.append([ hk[i][j], hk[i][j+1] ])
+    
+    """Identify labels which are right adjacent"""
+    j = 0
+    for i in xrange(L-1):
+        if grid[i][j] == True and grid[i+1][j] == True:
+            adjacent.append([ hk[i][j], hk[i+1][j] ])
+    
+    for i in xrange(1,L):
+        for j in xrange(1,L):
+            """Identify labels which are left adjacent"""
+            if grid[i][j] == True and grid[i-1][j] == True:
+                adjacent.append([ hk[i][j], hk[i-1][j] ])
+            """Identify labels which are top adjacent"""
+            if grid[i][j] == True and grid[i][j-1] == True:
+                adjacent.append([ hk[i][j], hk[i][j-1] ])
+    
+    """Converts 'adjacent' from a Python list into a NumPy array"""
+    adjacent = np.array(adjacent)
+    
+    """Relabel adjacent sites with the smallest label"""
+    for i in xrange(len(adjacent)):
+        for j in adjacent[i]:
+            min_label = min(adjacent[i])
+            hk = hk - (hk == j)*j + (hk == j)*min_label
+            adjacent = adjacent - (adjacent == j)*j + (adjacent == j)*min_label
+    
+    """
+    Containers indicating which cluster labels are on the
+    top, bottom, right and left borders
+    """
+    t = []
+    b = []
+    r = []
+    l = []
+    i = 0
+    for j in xrange(L):
+        if grid[i][j] == True:
+            t.append(hk[i][j])
+    i = L-1
+    for j in xrange(L):
+        if grid[i][j] == True:
+            b.append(hk[i][j])
+    j = 0
+    for i in xrange(L):
+        if grid[i][j] == True:
+            l.append(hk[i][j])
+    j = L-1
+    for i in xrange(L):
+        if grid[i][j] == True:
+            r.append(hk[i][j])
+    
+    """Converts 't', 'b', 'r' and 'l' from a Python list into a NumPy array"""
+    t = np.unique(t)
+    b = np.unique(b)
+    r = np.unique(r)
+    l = np.unique(l)
+    
+    """
+    Counts the number of clusters but does not count infinite clusters
+    (i.e. infinite clusters extend from top to bottom or left to right)
+    """
+    notcounted = []
+    for i in t:
+        for j in b:
+            if i == j:
+                notcounted.append(i)
+    for i in r:
+        for j in l:
+            if i == j:
+                notcounted.append(i)
+    notcounted = np.unique(notcounted)
+    clusters = list(np.unique(adjacent))
+    for i in notcounted:
+        clusters.remove(i)
+    
+    """Compute the total cluster mass"""
+    totalmass = 0.0
+    for i in clusters:
+        totalmass += np.sum(hk == i)
+    
+    """Calculate the mean cluster mass """
+    try:
+        meanmass = totalmass / len(clusters)
+    except:
+        meanmass = 0
 
+    return [hk, meanmass]
 
 """Definition of variables"""
-L = 6
-p = 0.59725
+L = 30
+all_p = np.linspace(0, 1, 100)
+all_mass = []
+for i in xrange(100):
+    mass = percolation(all_p[i], L)[1]
+    all_mass.append(mass)
 
-def algorithm1():
-    """Generate percolation structure"""
-    
-    lattice = np.zeros((L,L))
-    
-    """
-    Loop through all (i,j), draw a random number r,
-    if r < p then plot a point at the position (i,j)
-    """
-    for i in xrange(L):
-        for j in xrange(L):
-            r = np.random.random()
-            if r < p:
-                lattice[i][j] = 1
-    
-    plt.imshow(lattice, cmap=cm.gray)
+"""Plot the mean cluster mass as a function of the cluster concentration p"""
+plt.plot(all_p, all_mass)
+plt.xlabel('$p$')
+plt.ylabel('$<s>$')
+plt.legend(loc=2)
+plt.savefig('meanmassvsp.png', dpi=600)
+plt.show()
 
-def algorithm2():
-    """Generate percolation structure using a direct growth process"""
-    
-    """Let 255 == undefined"""
-    """Label all sites of a square lattice as undefined"""
-    lattice = 255*np.ones((L,L))
-    
-    """Label corners as vacant in order to setup a border"""
-    for i in xrange(L):
-        lattice[0][i] = 0
-        lattice[i][0] = 0
-        lattice[L-1][i] = 0
-        lattice[i][L-1] = 0
-    
-    """Occupy the center"""
-    lattice[L/2][L/2] = 1
-    
-    """
-    Define a list that will hold the positions of the 
-    undefined sites adjacent to the cluster.
-    """
-    lis = [[L/2+1, L/2],
-           [L/2, L/2+1],
-           [L/2-1, L/2],
-           [L/2, L/2-1]]
-    """The list has a length PD = 4L."""
-    PD = 4*L
-    for i in xrange(4, PD):
-        lis.append([None,None])
-    
-    """
-    Define 'counter', a pure counting variable, whose value is incremented
-    by 1 each time a new undefined boundary site of the cluster is generated.
-    """
-    global counter
-    counter = 3
-    
-    """Label sites as occupied (i.e. 1) or vacant (i.e. 0)."""
-    def definition(i,j):
-        if lattice[i][j] != 255:
-            return
-        global counter
-        r = np.random.random()
-        if r < p:
-            lattice[i][j] = 1
-            if lattice[i][j+1] == 255:
-                counter += 1
-                lis[counter%PD][0] = i
-                lis[counter%PD][1] = j+1
-            if lattice[i][j-1] == 255:
-                counter += 1
-                lis[counter%PD][0] = i
-                lis[counter%PD][1] = j-1
-            if lattice[i+1][j] == 255:
-                counter += 1
-                lis[counter%PD][0] = i+1
-                lis[counter%PD][1] = j
-            if lattice[i-1][j] == 255:
-                counter += 1
-                lis[counter%PD][0] = i-1
-                lis[counter%PD][1] = j
-        else:
-            lattice[i][j] = 0
-    
-    """Continue labelling sites until no undefined sites are left."""
-    for _ in xrange(10000):
-        for k in xrange(counter+1):
-            i = lis[k%PD][0]
-            j = lis[k%PD][1]
-            definition(i,j)
-    
-    """If there is still an undefined site, plot in red and blue"""
-    if 255 in lattice:
-        plt.imshow(lattice)
-    """If all sites are vacant or occupied, plot in black and white"""
-    if 255 not in lattice:
-        plt.imshow(lattice, cmap=cm.gray)
-
-algorithm2()
+"""Use the result to determine the critical concentration"""
+critical_p = all_p[all_mass.index(max(all_mass))]
+print critical_p
